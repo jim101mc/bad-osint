@@ -1,0 +1,170 @@
+version: 2.1
+
+parameters:
+  run_smoke_http:
+    type: boolean
+    default: false
+
+jobs:
+  backend_build:
+    docker:
+      - image: cimg/openjdk:21.0
+    steps:
+      - checkout
+      - run:
+          name: Verify Java
+          command: java --version
+      - run:
+          name: Compile Java sources
+          command: |
+            rm -rf out
+            mkdir -p out
+            find src/main/java -name "*.java" > /tmp/java_sources.txt
+            if [ ! -s /tmp/java_sources.txt ]; then
+              echo "No Java sources found."
+              exit 1
+            fi
+            javac -d out @/tmp/java_sources.txt
+            echo "Compiled $(wc -l < /tmp/java_sources.txt) Java source files into out/"
+
+  python_check:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - run:
+          name: Verify Python
+          command: |
+            python --version
+            python -m py_compile services/enricher/enricher.py services/enricher/connectors.py
+
+  frontend_check:
+    docker:
+      - image: cimg/node:20.12
+    steps:
+      - checkout
+      - run:
+          name: Verify Node
+          command: node --version
+      - run:
+          name: Syntax check frontend script
+          command: node --check web/app.js
+
+  smoke_http:
+    docker:
+      - image: cimg/openjdk:21.0
+        environment:
+          OSINT_DB_URL: jdbc:postgresql://127.0.0.1:5432/osint
+          OSINT_DB_USER: postgres
+          OSINT_DB_PASSWORD: postgres
+          OSINT_ENRICHER_URL: http://127.0.0.1:8091/enrich
+          OSINT_API_PORT: "8080"
+      - image: postgres:16
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: osint
+    environment:
+      APP_BASE_URL: http://127.0.0.1:8080
+    steps:
+      - checkout
+      - run:
+          name: Install smoke job dependencies
+          command: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends python3 python3-pip postgresql-client curl
+      - run:
+          name: Prepare database schema
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              if pg_isready -h 127.0.0.1 -p 5432 -U postgres >/dev/null 2>&1; then
+                break
+              fi
+              sleep 1
+            done
+            PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d osint -f database/schema.sql
+      - run:
+          name: Compile Java for smoke run
+          command: |
+            set -euo pipefail
+            rm -rf out
+            mkdir -p out
+            find src/main/java -name "*.java" > /tmp/java_sources.txt
+            if [ ! -s /tmp/java_sources.txt ]; then
+              echo "No Java sources found."
+              exit 1
+            fi
+            javac -d out @/tmp/java_sources.txt
+      - run:
+          name: Start stack and verify HTTP endpoints
+          command: |
+            set -euo pipefail
+            JDBC_JAR="/tmp/postgresql-jdbc.jar"
+            curl --silent --show-error --location \
+              --output "${JDBC_JAR}" \
+              "https://jdbc.postgresql.org/download/postgresql-42.7.4.jar"
+
+            python3 -u services/enricher/enricher.py > /tmp/enricher.out.log 2> /tmp/enricher.err.log &
+            ENRICHER_PID=$!
+            java -cp "out:${JDBC_JAR}" com.osintcorrelator.Main > /tmp/api.out.log 2> /tmp/api.err.log &
+            API_PID=$!
+
+            cleanup() {
+              kill "${API_PID}" "${ENRICHER_PID}" >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+
+            ready_code=000
+            for i in $(seq 1 60); do
+              ready_code=$(curl --silent --show-error --location --output /tmp/health_body --write-out "%{http_code}" "${APP_BASE_URL}/health" || true)
+              if [ "${ready_code}" -eq 200 ]; then
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "${ready_code}" -ne 200 ]; then
+              echo "API did not become healthy. Last HTTP code: ${ready_code}"
+              echo "---- api.err.log ----"
+              cat /tmp/api.err.log || true
+              echo "---- api.out.log ----"
+              cat /tmp/api.out.log || true
+              echo "---- enricher.err.log ----"
+              cat /tmp/enricher.err.log || true
+              exit 1
+            fi
+
+            for path in /health / /assets/app.js; do
+              url="${APP_BASE_URL}${path}"
+              code=$(curl --silent --show-error --location --output /tmp/http_body --write-out "%{http_code}" "$url") || {
+                echo "HTTP probe failed for ${url}. Make sure services are running and reachable."
+                exit 1
+              }
+              if [ "$code" -ne 200 ]; then
+                echo "Expected 200 from ${url}, got ${code}."
+                cat /tmp/http_body || true
+                exit 1
+              fi
+              echo "OK: ${url}"
+            done
+
+workflows:
+  checkup:
+    jobs:
+      - backend_build
+      - python_check
+      - frontend_check
+
+  smoke_http:
+    when: << pipeline.parameters.run_smoke_http >>
+    jobs:
+      - backend_build
+      - python_check
+      - frontend_check
+      - smoke_http:
+          requires:
+            - backend_build
+            - python_check
+            - frontend_check

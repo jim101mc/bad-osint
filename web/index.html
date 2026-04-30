@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSINT Profile Correlator</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1>OSINT Profile Correlator</h1>
+        <p id="statusLine">Connecting...</p>
+      </div>
+      <div class="topbar-actions">
+        <button id="themeButton" type="button" class="icon-button" title="Switch theme" aria-label="Switch theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" />
+          </svg>
+        </button>
+        <button id="refreshButton" type="button" class="icon-button" title="Refresh data" aria-label="Refresh data">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 2v6h-6" />
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M3 22v-6h6" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          </svg>
+        </button>
+        <button id="exportButton" type="button" class="icon-button" title="Download JSON" aria-label="Download JSON">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel intake-panel">
+      <form id="seedForm" class="seed-form">
+        <label for="seedInput">Single Seed Input</label>
+        <div class="seed-row">
+          <input id="seedInput" name="seed" type="text" autocomplete="off" placeholder="email, username, phone, domain, URL, or text">
+          <button type="submit">Analyze</button>
+        </div>
+      </form>
+      <p class="panel-note">Create one profile per seed. Enabled connectors run automatically and results appear below.</p>
+
+      <div id="counts" class="metrics"></div>
+    </section>
+
+    <section class="panel profiles-panel">
+      <div class="panel-heading">
+        <h2>Profiles</h2>
+        <span id="profileCount">0</span>
+      </div>
+      <div class="list-toolbar">
+        <input id="profileFilter" type="text" autocomplete="off" placeholder="Filter profiles">
+      </div>
+      <div id="profileList" class="profile-list"></div>
+    </section>
+
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <h2>Profile Detail</h2>
+        <span id="selectedProfileId">No selection</span>
+      </div>
+      <div id="profileDetail" class="detail-empty">No profile selected.</div>
+    </section>
+
+    <section class="panel tools-panel">
+      <div class="panel-heading">
+        <h2>OSINT Tools</h2>
+        <span id="toolCount">0</span>
+      </div>
+      <form id="toolForm" class="tool-form">
+        <input id="toolInput" type="text" value="email" placeholder="input type or keyword">
+        <select id="toolOpsec">
+          <option value="">Any OPSEC</option>
+          <option value="passive">Passive</option>
+          <option value="active">Active</option>
+        </select>
+        <button type="submit">Search Catalog</button>
+      </form>
+      <div id="toolList" class="tool-list"></div>
+    </section>
+  </main>
+
+  <template id="metricTemplate">
+    <div class="metric">
+      <span class="metric-value"></span>
+      <span class="metric-label"></span>
+    </div>
+  </template>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

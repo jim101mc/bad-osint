@@ -1,0 +1,6 @@
+out/
+__pycache__/
+*.pyc
+.env
+logs/
+database/osint_framework_import.sql
