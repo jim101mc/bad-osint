@@ -65,13 +65,13 @@ $env:OSINT_ENRICHER_URL="http://127.0.0.1:8091/enrich"
 Start everything and open the browser app from one PowerShell window:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\user\Documents\New project\scripts\start-all.ps1" -DbPassword "your_postgres_password"
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -DbPassword "your_postgres_password"
 ```
 
 Enable external connectors in the same one-window startup (Holehe, Sherlock, Social Analyzer, Maigret, PhoneInfoga, theHarvester, Amass, GHunt, SpiderFoot API):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\user\Documents\New project\scripts\start-all.ps1" `
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 `
   -DbPassword "your_postgres_password" `
   -EnableSherlock `
   -EnableSocialAnalyzer `
