@@ -1,0 +1,7 @@
+# Python-installable OSINT connector tools used by Bad OSINT.
+# Non-Python binaries and services are installed by scripts/install-tools.ps1.
+holehe
+sherlock-project
+social-analyzer
+maigret
+ghunt

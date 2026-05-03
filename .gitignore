@@ -2,5 +2,9 @@ out/
 __pycache__/
 *.pyc
 .env
+.badosint.local.env
+.venv/
+.tools/
+!.tools/.gitkeep
 logs/
 database/osint_framework_import.sql

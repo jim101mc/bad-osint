@@ -60,30 +60,32 @@ $env:OSINT_DB_PASSWORD="postgres"
 $env:OSINT_ENRICHER_URL="http://127.0.0.1:8091/enrich"
 ```
 
-## Run
+## Quick Start
 
-Start everything and open the browser app from one PowerShell window:
+Install the project-local OSINT tools first:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -DbPassword "your_postgres_password"
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1
 ```
 
-Enable external connectors in the same one-window startup (Holehe, Sherlock, Social Analyzer, Maigret, PhoneInfoga, theHarvester, Amass, GHunt, SpiderFoot API):
+From CMD:
+
+```cmd
+install.badosint.cmd
+```
+
+The installer creates `.venv`, `.tools`, and `.badosint.local.env`. These are local machine files and are ignored by git.
+
+Start everything and open the browser app from PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 `
-  -DbPassword "your_postgres_password" `
-  -EnableSherlock `
-  -EnableSocialAnalyzer `
-  -EnableMaigret `
-  -EnablePhoneInfoga `
-  -EnableTheHarvester `
-  -EnableAmass `
-  -EnableGHunt `
-  -EnableHolehe `
-  -EnableSpiderFoot `
-  -SpiderFootBaseUrl "http://127.0.0.1:5001" `
-  -ConnectorTimeoutSec 25
+powershell -ExecutionPolicy Bypass -File .\start.badosint.ps1
+```
+
+Start from CMD:
+
+```cmd
+start.badosint.cmd
 ```
 
 The page opens at:
@@ -92,7 +94,146 @@ The page opens at:
 http://127.0.0.1:8080/
 ```
 
-Keep that PowerShell window open while using the app. Press Enter in that window to stop both services.
+Keep the startup window open while using the app. Press Enter in that window to stop both services.
+
+If `-DbPassword` is not provided and `OSINT_DB_PASSWORD` is not set, startup asks for the local PostgreSQL password.
+
+## Tool Installer
+
+Install all supported tools:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1
+```
+
+Install only selected tools:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1 -Tools holehe,sherlock,ghunt
+```
+
+Skip selected tools:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1 -SkipTools cobalt,spiderfoot
+```
+
+CMD equivalents:
+
+```cmd
+install.badosint.cmd
+install.badosint.cmd -Tools holehe,sherlock,ghunt
+install.badosint.cmd -SkipTools cobalt,spiderfoot
+```
+
+The installer prompts before optional interactive steps such as GHunt login and Cobalt Docker image setup. It writes command paths into `.badosint.local.env`, and `start.badosint` reads that file automatically.
+
+On Windows, the installer uses python.org Python 3.12 for local virtual environments. If no usable Python 3.12 is found, it can download Python 3.12 into `.tools\python312`. MSYS Python is not used for `.venv`, and Python 3.13 is avoided for SpiderFoot because its `lxml<5` dependency can fall back to a source build on Windows.
+
+## External Repos Used
+
+This project integrates and/or automates local installation for these upstream OSINT tools:
+
+- Holehe: https://github.com/megadose/holehe
+- Sherlock: https://github.com/sherlock-project/sherlock
+- Social Analyzer: https://github.com/qeeqbox/social-analyzer
+- Maigret: https://github.com/soxoj/maigret
+- PhoneInfoga: https://github.com/sundowndev/phoneinfoga
+- theHarvester: https://github.com/laramies/theHarvester
+- Amass: https://github.com/owasp-amass/amass
+- GHunt: https://github.com/mxrch/GHunt
+- SpiderFoot: https://github.com/smicallef/spiderfoot
+
+Planned once media support lands:
+
+- Cobalt: https://github.com/imputnet/cobalt
+
+## Default Tools
+
+Startup enables all supported external tools by default:
+
+- `holehe`
+- `sherlock`
+- `social-analyzer`
+- `maigret`
+- `phoneinfoga`
+- `theharvester`
+- `amass`
+- `ghunt`
+- `spiderfoot`
+
+Planned once media support lands:
+
+- `cobalt`
+
+If an enabled optional tool is missing or unreachable, startup lists it and asks whether to continue without it for that run.
+
+## Disable Tools
+
+Disable selected tools from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.badosint.ps1 -DisableTools ghunt,amass
+```
+
+Disable selected tools from CMD:
+
+```cmd
+start.badosint.cmd -DisableTools ghunt,amass
+```
+
+Accepted tool names are lowercase names from the supported Default Tools list. Comma-separated values are supported.
+
+## Advanced Startup
+
+The root launchers call the advanced script below. Use it directly for custom paths, ports, command overrides, and timeouts:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -DisableTools ghunt,amass
+```
+
+The root launchers automatically pass `-StopExisting` and `-AutoPort`. That stops stale Bad OSINT Java/Python processes before binding ports and chooses another free local port if `8080` is blocked by something Windows will not let the script stop. You can use the flags directly with the advanced script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -StopExisting
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -AutoPort
+```
+
+Examples:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 `
+  -DbPassword "your_postgres_password" `
+  -DisableTools ghunt,amass `
+  -PhoneInfogaCmd "C:\tools\phoneinfoga.exe" `
+  -SpiderFootBaseUrl "http://127.0.0.1:5001" `
+  -ConnectorTimeoutSec 25
+```
+
+## Help
+
+Print startup help without starting services:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.badosint.ps1 -h
+powershell -ExecutionPolicy Bypass -File .\start.badosint.ps1 --help
+powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 -h
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1 -h
+```
+
+```cmd
+start.badosint.cmd -h
+start.badosint.cmd /?
+install.badosint.cmd -h
+```
+
+Run a local checkup:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\checkup.ps1
+```
+
+Startup logs are written to `logs\api.out.log`, `logs\api.err.log`, `logs\enricher.out.log`, and `logs\enricher.err.log`.
 
 The browser app lets you create profiles, inspect all collected profiles/evidence/identifiers/connections in PostgreSQL, search the OSINT Framework catalog, and export collected profile data as JSON.
 
@@ -100,7 +241,7 @@ Each new profile also receives automatic category coverage entries:
 - one queued entry per OSINT Framework category currently loaded in `osint_tools`
 - plus queued tool entries (top 3 tools per category) so every category has concrete tool pivots attached to the profile
 
-Start the Python enrichment service:
+Start only the Python enrichment service:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-enricher.ps1
@@ -145,7 +286,15 @@ Conditional workflow:
 
 When `run_smoke_http=true`, CircleCI now starts PostgreSQL + enricher + API inside CI, applies `database/schema.sql`, waits for `/health`, and then asserts HTTP 200 for `/health`, `/`, and `/assets/app.js`.
 
-## External Tool Setup (Optional)
+## External Tool Setup (Manual Fallback)
+
+The recommended path is the automatic installer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.badosint.ps1
+```
+
+Use the manual commands below only when you want to manage tools yourself.
 
 Install Sherlock:
 
@@ -170,10 +319,13 @@ Install PhoneInfoga (binary or Docker, per upstream docs):
 - [PhoneInfoga usage docs](https://sundowndev.github.io/phoneinfoga/getting-started/usage/)
 - Basic CLI usage after install: `phoneinfoga scan -n "+1 555 444 3333"`
 
-Install theHarvester:
+Install theHarvester from source:
 
 ```powershell
-python -m pip install theHarvester
+git clone https://github.com/laramies/theHarvester.git
+cd theHarvester
+python -m pip install uv
+uv sync
 ```
 
 Install Amass:
@@ -200,7 +352,7 @@ Install Holehe:
 python -m pip install holehe
 ```
 
-Run SpiderFoot server (in a separate terminal):
+Run SpiderFoot server manually when you did not use the installer:
 
 ```powershell
 git clone https://github.com/smicallef/spiderfoot.git
@@ -209,7 +361,7 @@ python -m pip install -r requirements.txt
 python .\sf.py -l 127.0.0.1:5001
 ```
 
-Then start this project with `-EnableSpiderFoot` and `-SpiderFootBaseUrl "http://127.0.0.1:5001"`.
+Then start this project. If SpiderFoot was installed by `install.badosint.ps1`, `start.badosint` can start the local SpiderFoot service automatically. Otherwise, SpiderFoot is enabled by default and uses `http://127.0.0.1:5001` unless you pass a different `-SpiderFootBaseUrl`.
 
 To enable the external connectors when running only the enricher:
 
@@ -233,11 +385,8 @@ If a connector executable is not in PATH, pass explicit command overrides:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-all.ps1 `
   -DbPassword "your_postgres_password" `
-  -EnableHolehe `
   -HoleheCmd "C:\tools\holehe.exe" `
-  -EnablePhoneInfoga `
   -PhoneInfogaCmd "C:\tools\phoneinfoga.exe" `
-  -EnableAmass `
   -AmassCmd "C:\tools\amass.exe"
 ```
 
@@ -307,7 +456,7 @@ The app can use the catalog to recommend or find sources for a seed input. Conne
 
 - Confidence scores are hints, not truth.
 - Evidence URLs and text should be public, lawful, and relevant.
-- External connector integrations are optional and off by default. Enable only the tools you installed (`-EnableHolehe`, `-EnableSherlock`, `-EnableSocialAnalyzer`, `-EnableMaigret`, `-EnablePhoneInfoga`, `-EnableTheHarvester`, `-EnableAmass`, `-EnableGHunt`, `-EnableSpiderFoot`).
+- External connector integrations are enabled by default in `start-all.ps1`. Use `-DisableTools ghunt,amass` to turn off selected tools for a run.
 - `Holehe`, `Sherlock`, `Social Analyzer`, `Maigret`, `PhoneInfoga`, `theHarvester`, `Amass`, and `GHunt` run locally from your environment. `SpiderFoot` integration uses the local SpiderFoot API (`/startscan`, `/scanstatus`, `/scaneventresults`) and expects a running SpiderFoot server.
 - Holehe runs first when enabled and checks email existence scope for the primary seed email plus at most one additional extracted email by default.
 - Auto-correlation persists internal keys (`email`, `username`, `domain`) and creates deduplicated `shared_email` / `shared_username` connections with source `auto-correlation`. Domain-only overlaps are stored as evidence without connection edges.
