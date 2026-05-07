@@ -205,6 +205,7 @@ function renderProfileDetail() {
   const evidence = safeArray(profile?.evidence);
   const searches = safeArray(profile?.searches);
   const connections = safeArray(profile?.connections);
+  const processEvents = safeArray(profile?.process?.events);
   const links = identifierRows(profile);
   if (!profile) {
     elements.profileDetail.className = "detail-empty";
@@ -227,6 +228,7 @@ function renderProfileDetail() {
     </div>
     <div class="tabs">
       ${tabButton("identifiers", `Finds (${links.length})`)}
+      ${tabButton("process", `Process (${processEvents.length})`)}
       ${tabButton("evidence", `Evidence (${evidence.length})`)}
       ${tabButton("searches", `Searches (${searches.length})`)}
       ${tabButton("coverage", `Coverage (${coverageRows(profile).length})`)}
@@ -255,10 +257,15 @@ function renderTabContent(profile) {
   const evidence = safeArray(profile.evidence);
   const searches = safeArray(profile.searches);
   const connections = safeArray(profile.connections);
+  const processEvents = safeArray(profile?.process?.events);
   if (state.activeTab === "identifiers") {
     const links = identifierRows(profile);
     target.innerHTML = table(["Link", "Confidence", "Source"], links, item => [
       linkIfUrl(item.value), pct(item.confidence), item.source
+    ], { maxRows: MAX_TAB_ROWS });
+  } else if (state.activeTab === "process") {
+    target.innerHTML = table(["Tool", "Event", "Severity", "Message", "When"], processEvents, item => [
+      item.tool, item.event_type, item.severity, item.message, formatStamp(item.created_at)
     ], { maxRows: MAX_TAB_ROWS });
   } else if (state.activeTab === "evidence") {
     target.innerHTML = table(["Type", "Title", "Snippet", "Confidence"], evidence, item => [

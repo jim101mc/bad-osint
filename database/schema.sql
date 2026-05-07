@@ -102,3 +102,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_osint_tools_unique
 CREATE INDEX IF NOT EXISTS idx_osint_tools_input ON osint_tools (lower(input_type));
 CREATE INDEX IF NOT EXISTS idx_osint_tools_name ON osint_tools (lower(name));
 CREATE INDEX IF NOT EXISTS idx_osint_tools_opsec ON osint_tools (opsec);
+
+-- Agentic rewrite v2: run tracking + process timeline
+CREATE TABLE IF NOT EXISTS runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    seed TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'completed',
+    enabled_tools TEXT NOT NULL DEFAULT '',
+    warnings_count INTEGER NOT NULL DEFAULT 0,
+    errors_count INTEGER NOT NULL DEFAULT 0,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS run_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    tool TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL DEFAULT '',
+    detail_json TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_profile ON runs (profile_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events (run_id, created_at ASC);

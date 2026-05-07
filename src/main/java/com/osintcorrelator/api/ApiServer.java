@@ -95,6 +95,11 @@ public final class ApiServer {
 
         Map<String, Object> enrichment = enricherClient.enrich(seed);
         UUID profileId = database.createProfile(seed, enrichment);
+        try {
+            database.recordRun(profileId, seed, enrichment);
+        } catch (Exception exception) {
+            System.err.printf("Run logging skipped for profile %s: %s%n", profileId, errorMessage(exception));
+        }
         database.recordSearch(profileId, seed, "completed", Json.array(enrichment, "evidence").size());
         for (Object item : Json.array(enrichment, "suggestedSearches")) {
             Map<String, Object> search = Json.expectObject(item);

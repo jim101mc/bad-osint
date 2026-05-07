@@ -71,7 +71,44 @@ public final class Database {
                     "SELECT id, query, status, result_count, created_at FROM searches WHERE profile_id = ? ORDER BY created_at DESC",
                     profileId));
             profile.put("connections", connections(connection, profileId));
+            profile.put("process", latestRunProcess(connection, profileId));
             return profile;
+        }
+    }
+
+    public void recordRun(UUID profileId, String seed, Map<String, Object> enrichment) throws SQLException {
+        Object processRaw = enrichment.get("process");
+        Map<String, Object> process = processRaw instanceof Map<?, ?> ? Json.expectObject(processRaw) : Map.of();
+        if (process.isEmpty()) {
+            return;
+        }
+        List<Object> events = Json.array(process, "events");
+        List<String> enabled = new ArrayList<>();
+        for (Object item : Json.array(process, "enabledTools")) {
+            if (item == null) continue;
+            String value = String.valueOf(item).trim();
+            if (!value.isBlank()) enabled.add(value);
+        }
+        String enabledTools = String.join(",", enabled);
+        int warnings = 0;
+        int errors = 0;
+        for (Object item : events) {
+            Map<String, Object> event = Json.expectObject(item);
+            String severity = Json.string(event, "severity", "info").toLowerCase(Locale.ROOT);
+            if ("error".equals(severity)) errors++;
+            else if ("warn".equals(severity) || "warning".equals(severity)) warnings++;
+        }
+
+        try (Connection connection = connect()) {
+            connection.setAutoCommit(false);
+            try {
+                UUID runId = insertRun(connection, profileId, seed, enabledTools, warnings, errors);
+                insertRunEvents(connection, runId, events);
+                connection.commit();
+            } catch (SQLException | RuntimeException exc) {
+                connection.rollback();
+                throw exc;
+            }
         }
     }
 
@@ -129,6 +166,68 @@ public final class Database {
             summary.put("osintTools", normalize(rs.getObject("osint_tools")));
             summary.put("osintCategories", normalize(rs.getObject("osint_categories")));
             return summary;
+        }
+    }
+
+    private Map<String, Object> latestRunProcess(Connection connection, UUID profileId) throws SQLException {
+        Map<String, Object> run = one(connection, """
+                SELECT id, seed, status, enabled_tools, warnings_count, errors_count, started_at, finished_at
+                FROM runs
+                WHERE profile_id = ?
+                ORDER BY started_at DESC
+                LIMIT 1
+                """, profileId);
+        if (run.isEmpty()) {
+            return Map.of("run", Map.of(), "events", List.of());
+        }
+        UUID runId = UUID.fromString(String.valueOf(run.get("id")));
+        List<Map<String, Object>> events = many(connection, """
+                SELECT id, tool, event_type, severity, message, detail_json, created_at
+                FROM run_events
+                WHERE run_id = ?
+                ORDER BY created_at ASC
+                """, runId);
+        return Map.of("run", run, "events", events);
+    }
+
+    private UUID insertRun(Connection connection, UUID profileId, String seed, String enabledTools, int warnings, int errors) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO runs (profile_id, seed, status, enabled_tools, warnings_count, errors_count)
+                VALUES (?, ?, 'completed', ?, ?, ?)
+                RETURNING id
+                """)) {
+            statement.setObject(1, profileId);
+            statement.setString(2, seed);
+            statement.setString(3, enabledTools == null ? "" : enabledTools);
+            statement.setInt(4, warnings);
+            statement.setInt(5, errors);
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return (UUID) rs.getObject(1);
+            }
+        }
+    }
+
+    private void insertRunEvents(Connection connection, UUID runId, List<Object> events) throws SQLException {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO run_events (run_id, tool, event_type, severity, message, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)) {
+            for (Object item : events) {
+                Map<String, Object> event = Json.expectObject(item);
+                statement.setObject(1, runId);
+                statement.setString(2, Json.string(event, "tool", "unknown"));
+                statement.setString(3, Json.string(event, "event_type", "event"));
+                statement.setString(4, Json.string(event, "severity", "info"));
+                statement.setString(5, Json.string(event, "message", ""));
+                Object detail = event.get("detail");
+                statement.setString(6, detail == null ? "" : Json.stringify(detail));
+                statement.addBatch();
+            }
+            statement.executeBatch();
         }
     }
 

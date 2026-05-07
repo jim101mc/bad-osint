@@ -659,6 +659,7 @@ $envValues = @{
     OSINT_DB_URL = $DbUrl
     OSINT_DB_USER = $DbUser
     OSINT_DB_PASSWORD = $DbPassword
+    # Agentic rewrite v2: the enricher URL now points to the orchestrator, which calls local tool agents.
     OSINT_ENRICHER_URL = $EnricherUrl
     OSINT_API_PORT = $ApiPort
 }
@@ -690,13 +691,55 @@ $enricherEnvValues = @{
     OSINT_SPIDERFOOT_MAX_EVENTS = [string]$SpiderFootMaxEvents
 }
 
-$pythonScript = Join-Path $root "services\enricher\enricher.py"
+$pythonScript = Join-Path $root "services\orchestrator\orchestrator.py"
 $enricherApp = Start-AppProcess `
     -File $PythonExe `
     -Arguments "-u `"$pythonScript`"" `
     -OutFile (Join-Path $root "logs\enricher.out.log") `
     -ErrFile (Join-Path $root "logs\enricher.err.log") `
     -Environment $enricherEnvValues
+
+# Start tool-per-agent services (agentic rewrite v2).
+$agentScripts = @(
+    @{ Name = "agent-holehe"; Path = (Join-Path $root "services\agents\holehe_agent.py"); Port = 8111; EnvPort = "OSINT_AGENT_PORT_HOLEHE" },
+    @{ Name = "agent-sherlock"; Path = (Join-Path $root "services\agents\sherlock_agent.py"); Port = 8112; EnvPort = "OSINT_AGENT_PORT_SHERLOCK" },
+    @{ Name = "agent-social-analyzer"; Path = (Join-Path $root "services\agents\social_analyzer_agent.py"); Port = 8113; EnvPort = "OSINT_AGENT_PORT_SOCIAL_ANALYZER" },
+    @{ Name = "agent-maigret"; Path = (Join-Path $root "services\agents\maigret_agent.py"); Port = 8114; EnvPort = "OSINT_AGENT_PORT_MAIGRET" },
+    @{ Name = "agent-phoneinfoga"; Path = (Join-Path $root "services\agents\phoneinfoga_agent.py"); Port = 8115; EnvPort = "OSINT_AGENT_PORT_PHONEINFOGA" },
+    @{ Name = "agent-theharvester"; Path = (Join-Path $root "services\agents\theharvester_agent.py"); Port = 8116; EnvPort = "OSINT_AGENT_PORT_THEHARVESTER" },
+    @{ Name = "agent-amass"; Path = (Join-Path $root "services\agents\amass_agent.py"); Port = 8117; EnvPort = "OSINT_AGENT_PORT_AMASS" },
+    @{ Name = "agent-ghunt"; Path = (Join-Path $root "services\agents\ghunt_agent.py"); Port = 8118; EnvPort = "OSINT_AGENT_PORT_GHUNT" },
+    @{ Name = "agent-spiderfoot"; Path = (Join-Path $root "services\agents\spiderfoot_agent.py"); Port = 8119; EnvPort = "OSINT_AGENT_PORT_SPIDERFOOT" },
+    @{ Name = "agent-catalog"; Path = (Join-Path $root "services\agents\catalog_agent.py"); Port = 8120; EnvPort = "OSINT_AGENT_PORT_CATALOG" }
+)
+
+$agentApps = @()
+foreach ($agent in $agentScripts) {
+    $agentPort = $agent.Port
+    if ($enricherEnvValues.ContainsKey($agent.EnvPort) -and $enricherEnvValues[$agent.EnvPort]) {
+        $agentPort = [int]$enricherEnvValues[$agent.EnvPort]
+    } else {
+        $enricherEnvValues[$agent.EnvPort] = [string]$agentPort
+    }
+
+    if (Test-LocalPortOpen -Port $agentPort) {
+        if ($AutoPort) {
+            $oldPort = $agentPort
+            $agentPort = Find-FreeLocalPort -StartPort ($agentPort + 1)
+            $enricherEnvValues[$agent.EnvPort] = [string]$agentPort
+            Write-Host "Port $oldPort is unavailable. Using agent port $agentPort for $($agent.Name) instead."
+        } else {
+            throw "Port $agentPort is already in use by another process. Stop it, or run this script with -AutoPort."
+        }
+    }
+
+    $agentApps += Start-AppProcess `
+        -File $PythonExe `
+        -Arguments "-u `"$($agent.Path)`"" `
+        -OutFile (Join-Path $root "logs\$($agent.Name).out.log") `
+        -ErrFile (Join-Path $root "logs\$($agent.Name).err.log") `
+        -Environment $enricherEnvValues
+}
 
 Start-Sleep -Seconds 1
 
@@ -727,6 +770,7 @@ for ($i = 0; $i -lt 30; $i++) {
 if (-not $ready) {
     Write-Host "API did not become ready. Check logs\api.err.log and logs\api.out.log."
     Stop-AppProcess -App $apiApp
+    foreach ($agentApp in ($agentApps | Where-Object { $_ })) { Stop-AppProcess -App $agentApp }
     Stop-AppProcess -App $enricherApp
     Stop-AppProcess -App $spiderFootApp
     exit 1
@@ -738,6 +782,7 @@ try {
     Write-Host "API started, but PostgreSQL is not usable with the provided credentials."
     Write-Host $_.Exception.Message
     Stop-AppProcess -App $apiApp
+    foreach ($agentApp in ($agentApps | Where-Object { $_ })) { Stop-AppProcess -App $agentApp }
     Stop-AppProcess -App $enricherApp
     Stop-AppProcess -App $spiderFootApp
     exit 1
@@ -749,6 +794,7 @@ Write-Host "Keep this window open. Press Enter to stop services."
 [void][Console]::ReadLine()
 
 Stop-AppProcess -App $apiApp
+foreach ($agentApp in ($agentApps | Where-Object { $_ })) { Stop-AppProcess -App $agentApp }
 Stop-AppProcess -App $enricherApp
 Stop-AppProcess -App $spiderFootApp
 Write-Host "Stopped."
